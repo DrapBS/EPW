@@ -23,7 +23,7 @@ from bauiv1lib.colorpicker import ColorPickerExact
 from bauiv1lib.confirm import ConfirmWindow
 from bauiv1lib.popup import PopupMenuWindow
 
-__version__ = 'v1.5'
+__version__ = 'v1.6'
 
 
 def _print_exception(msg: str = '') -> None:
