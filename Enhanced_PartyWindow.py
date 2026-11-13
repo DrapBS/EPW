@@ -23,8 +23,8 @@ from bauiv1lib.colorpicker import ColorPickerExact
 from bauiv1lib.confirm import ConfirmWindow
 from bauiv1lib.popup import PopupMenuWindow
 
-# Updated: 1.7 > 1.8 (Delayed green update notification)
-__version__ = 'v1.8'
+# Updated: 1.8 > 1.9 (Nickname controls added to player info popup)
+__version__ = 'v1.9'
 
 
 def _print_exception(msg: str = '') -> None:
@@ -1756,7 +1756,11 @@ class _PlayerCard:
         rows += [('PROFILE NAME', p) for p in profs]
         if cid is not None:
             rows.append(('CLIENT ID', str(cid)))
+        self._account_key = acc
+        self._saved_nick = _fr_get_nick(acc) if acc else ''
+        rows.append(('NICKNAME', '#' + self._saved_nick if self._saved_nick else 'Not set'))
         title = profs[0] if profs else (acc or 'Player')
+        self._popup_title = title
         W = 380
         H = 70 + len(rows) * 42 + 58
         ui = bui.app.ui_v1.uiscale
@@ -1804,17 +1808,38 @@ class _PlayerCard:
                 parent=root, position=(22, yy + 13), size=(0, 0), scale=0.8,
                 text=bui.Lstr(value=val), h_align='left', v_align='center',
                 maxwidth=200, color=(1, 1, 1))
-            add = bui.buttonwidget(
-                parent=root, position=(W - 12 - 8 - 58 * 2 - 6, yy + 4),
-                size=(56, 30), label='Add', button_type='square',
-                autoselect=True, color=pal['accent'], textcolor=pal['text'], text_scale=0.9,
-                on_activate_call=bui.CallStrict(self._add, val))
-            cp = bui.buttonwidget(
-                parent=root, position=(W - 12 - 8 - 58, yy + 4),
-                size=(56, 30), label='Copy', button_type='square',
-                autoselect=True, color=pal['accent'], textcolor=pal['text'], text_scale=0.9,
-                on_activate_call=bui.CallStrict(self._copy, val))
-            self._btns += [add, cp]
+            if label == 'NICKNAME':
+                if self._saved_nick:
+                    change = bui.buttonwidget(
+                        parent=root, position=(W - 12 - 8 - 58 * 2 - 6, yy + 4),
+                        size=(56, 30), label='Change', button_type='square',
+                        autoselect=True, color=pal['accent'], textcolor=pal['text'],
+                        text_scale=0.78, on_activate_call=self._edit_nick)
+                    remove = bui.buttonwidget(
+                        parent=root, position=(W - 12 - 8 - 58, yy + 4),
+                        size=(56, 30), label='Remove', button_type='square',
+                        autoselect=True, color=pal['accent'], textcolor=pal['text'],
+                        text_scale=0.78, on_activate_call=self._remove_nick)
+                    self._btns += [change, remove]
+                else:
+                    add_nick = bui.buttonwidget(
+                        parent=root, position=(W - 12 - 8 - 116, yy + 4),
+                        size=(116, 30), label='Add Nick', button_type='square',
+                        autoselect=True, color=pal['accent'], textcolor=pal['text'],
+                        text_scale=0.85, on_activate_call=self._edit_nick)
+                    self._btns.append(add_nick)
+            else:
+                add = bui.buttonwidget(
+                    parent=root, position=(W - 12 - 8 - 58 * 2 - 6, yy + 4),
+                    size=(56, 30), label='Add', button_type='square',
+                    autoselect=True, color=pal['accent'], textcolor=pal['text'], text_scale=0.9,
+                    on_activate_call=bui.CallStrict(self._add, val))
+                cp = bui.buttonwidget(
+                    parent=root, position=(W - 12 - 8 - 58, yy + 4),
+                    size=(56, 30), label='Copy', button_type='square',
+                    autoselect=True, color=pal['accent'], textcolor=pal['text'], text_scale=0.9,
+                    on_activate_call=bui.CallStrict(self._copy, val))
+                self._btns += [add, cp]
         self._actions = bui.buttonwidget(
             parent=root, position=(20, 10), size=(160, 38),
             label='Kick / admin ...', button_type='square', autoselect=True,
@@ -1828,6 +1853,39 @@ class _PlayerCard:
         self._btns += [self._actions, done]
         self._timer: Any = bui.AppTimer(
             0.25, bui.WeakCallStrict(self._tick), repeat=True)
+
+    def _edit_nick(self) -> None:
+        acc = self._account_key
+        if not acc:
+            bui.screenmessage('Could not identify player',
+                              color=(1.0, 0.4, 0.4))
+            return
+
+        from bauiv1lib.passwordprompt import PasswordPromptWindow
+
+        def _on_result(value: str | None) -> None:
+            if value is None:
+                return
+            nick = value.strip()
+            if not nick:
+                return
+            _fr_set_nick(acc, nick)
+            bui.screenmessage('Nickname set: #' + nick,
+                              color=(0.4, 1.0, 0.5))
+            self.close()
+
+        PasswordPromptWindow(
+            description=babase.Lstr(value='Nickname for ' + (self._popup_title
+                if hasattr(self, '_popup_title') else 'player')),
+            on_result=_on_result)
+
+    def _remove_nick(self) -> None:
+        acc = self._account_key
+        if not acc:
+            return
+        _fr_set_nick(acc, '')
+        bui.screenmessage('Nickname removed', color=(0.8, 0.8, 0.8))
+        self.close()
 
     def _paint(self, pal) -> None:
         kinds = _kind_colors(pal)
